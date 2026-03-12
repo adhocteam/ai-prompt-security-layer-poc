@@ -6,8 +6,6 @@ Paste text containing credentials into the input pane, configure marker-based re
 
 ## Features
 * Runs entirely in the browser (client-side); nothing gets sent to a server
-* Loads your C++ redaction engine compiled to WebAssembly (`redactor.wasm`) via `redactor.mjs`
-* Lets a user build a redaction ruleset in a left-side “Rules” panel
 * Supports rule types:
 
   * Bearer auth header redaction (`Authorization: Bearer …`)
