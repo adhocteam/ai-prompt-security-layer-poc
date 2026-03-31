@@ -30,9 +30,33 @@
       "title": "Security Layer",
       "properties": {
         "securityLayer.redactionRules": {
-          "type": "string",
-          "default": "{\"rules\": []}",
-          "description": "JSON string defining redaction rules for the Security Layer extension."
+          "type": "array",
+          "default": [
+            {
+              "pattern": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
+              "flags": "g",
+              "replacement": "[EMAIL REDACTED]"
+            },
+            {
+              "pattern": "eyJ[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]+\\.[a-zA-Z0-9_-]+",
+              "flags": "g",
+              "replacement": "[JWT REDACTED]"
+            },
+            {
+              "pattern": "https?://[^\\s]+\\.internal[^\\s]*",
+              "flags": "g",
+              "replacement": "[INTERNAL URL REDACTED]"
+            }
+          ],
+          "description": "Redaction rules for the Security Layer extension.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pattern": { "type": "string" },
+              "flags": { "type": "string" },
+              "replacement": { "type": "string" }
+            }
+          }
         }
       }
     }

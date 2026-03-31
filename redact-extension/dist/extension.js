@@ -51,29 +51,68 @@ var __asyncValues = (this && this.__asyncValues) || function (o) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
 const vscode = __importStar(require("vscode"));
-const BASE_PROMPT = 'You are a helpful assistant that redacts PII and secrets from text.';
+function applyRedactionRules(text) {
+    var _a, _b;
+    const config = vscode.workspace.getConfiguration('securityLayer');
+    const rules = config.get('redactionRules', []);
+    for (const rule of rules) {
+        const regex = new RegExp(rule.pattern, (_a = rule.flags) !== null && _a !== void 0 ? _a : 'g');
+        text = text.replace(regex, (_b = rule.replacement) !== null && _b !== void 0 ? _b : '[REDACTED]');
+    }
+    return text;
+}
 function activate(context) {
     const handler = (request, context, stream, token) => __awaiter(this, void 0, void 0, function* () {
-        var _a, e_1, _b, _c;
-        const messages = [
-            vscode.LanguageModelChatMessage.User(BASE_PROMPT),
-            vscode.LanguageModelChatMessage.User("Redact PII and secrets from the following: " + request.prompt)
+        var _a, e_1, _b, _c, _d, e_2, _e, _f;
+        let fullPrompt = request.prompt;
+        for (const ref of request.references) {
+            if (ref.value instanceof vscode.Uri) {
+                const fileContent = yield vscode.workspace.fs.readFile(ref.value);
+                const text = Buffer.from(fileContent).toString('utf8');
+                fullPrompt += `\n\nFile: ${ref.value.fsPath}\n\`\`\`\n${text}\n\`\`\``;
+            }
+        }
+        fullPrompt = applyRedactionRules(fullPrompt);
+        const redactMessages = [
+            vscode.LanguageModelChatMessage.User('Redact all PII and secrets from the following text. Return ONLY the redacted text, nothing else: ' + fullPrompt)
         ];
-        const chatResponse = yield request.model.sendRequest(messages, {}, token);
+        const redactResponse = yield request.model.sendRequest(redactMessages, {}, token);
+        let redactedPrompt = '';
         try {
-            for (var _d = true, _e = __asyncValues(chatResponse.text), _f; _f = yield _e.next(), _a = _f.done, !_a; _d = true) {
-                _c = _f.value;
-                _d = false;
+            for (var _g = true, _h = __asyncValues(redactResponse.text), _j; _j = yield _h.next(), _a = _j.done, !_a; _g = true) {
+                _c = _j.value;
+                _g = false;
                 const fragment = _c;
-                stream.markdown(fragment);
+                redactedPrompt += fragment;
             }
         }
         catch (e_1_1) { e_1 = { error: e_1_1 }; }
         finally {
             try {
-                if (!_d && !_a && (_b = _e.return)) yield _b.call(_e);
+                if (!_g && !_a && (_b = _h.return)) yield _b.call(_h);
             }
             finally { if (e_1) throw e_1.error; }
+        }
+        stream.markdown(`**Redacted prompt:** ${redactedPrompt}\n\n---\n\n`);
+        const copilotMessages = [
+            vscode.LanguageModelChatMessage.User('You are a helpful coding assistant.'),
+            vscode.LanguageModelChatMessage.User(redactedPrompt)
+        ];
+        const copilotResponse = yield request.model.sendRequest(copilotMessages, {}, token);
+        try {
+            for (var _k = true, _l = __asyncValues(copilotResponse.text), _m; _m = yield _l.next(), _d = _m.done, !_d; _k = true) {
+                _f = _m.value;
+                _k = false;
+                const fragment = _f;
+                stream.markdown(fragment);
+            }
+        }
+        catch (e_2_1) { e_2 = { error: e_2_1 }; }
+        finally {
+            try {
+                if (!_k && !_d && (_e = _l.return)) yield _e.call(_l);
+            }
+            finally { if (e_2) throw e_2.error; }
         }
     });
     const participant = vscode.chat.createChatParticipant('redact-extension.redact', handler);
