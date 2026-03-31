@@ -116,6 +116,6 @@ function activate(context) {
         }
     });
     const participant = vscode.chat.createChatParticipant('redact-extension.redact', handler);
-    participant.iconPath = vscode.Uri.joinPath(context.extensionUri, 'public', 'icon.png');
+    participant.iconPath = vscode.Uri.joinPath(context.extensionUri, 'src', 'icon.png');
 }
 //# sourceMappingURL=extension.js.map
