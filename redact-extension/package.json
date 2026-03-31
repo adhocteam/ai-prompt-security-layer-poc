@@ -1,0 +1,51 @@
+{
+  "name": "redact-extension",
+  "publisher": "redact-man",
+  "displayName": "Redact Extension",
+  "description": "Redacts PII and secrets from chat responses.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "AI"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onChatParticipant:redact-extension.redact"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "redact-extension.redact",
+        "fullName": "Redact Assistant",
+        "name": "redact",
+        "description": "Redacts PII and secrets from chat responses.",
+        "isSticky": true
+      }
+    ],
+    "configuration": {
+      "title": "Security Layer",
+      "properties": {
+        "securityLayer.redactionRules": {
+          "type": "string",
+          "default": "{\"rules\": []}",
+          "description": "JSON string defining redaction rules for the Security Layer extension."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.3.3"
+  }
+}

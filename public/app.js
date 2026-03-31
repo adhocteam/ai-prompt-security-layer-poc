@@ -16,11 +16,9 @@ function App() {
     { type: "json_field", header: "", key: "token", marker: "", mode: "char", stop_char: "\"", stop_set: "", max_len: 0 },
   ];
 
-  // ---- gradient helpers + per-rule shading ----
   this.mix = (a, b, t) => Math.round(a + (b - a) * t);
 
   this.paintRuleBoxes = () => {
-    // Run after Lemonade updates the DOM
     setTimeout(() => {
       const root = document.querySelector("#ruleList");
       if (!root) return;
@@ -35,8 +33,7 @@ function App() {
   this.updateRuleShades = () => {
     const n = this.rules.length;
 
-    // More obvious light gray -> white
-    const start = { r: 232, g: 232, b: 232 };
+    const start = { r: 224, g: 224, b: 224 }; // #e0e0e0
     const end = { r: 255, g: 255, b: 255 };
 
     for (let i = 0; i < n; i++) {
@@ -50,47 +47,143 @@ function App() {
     this.paintRuleBoxes();
   };
 
-  // initial shade
   this.updateRuleShades();
 
-  this.input = `Authorization: Bearer abcdef123456
+  // ---- demo input ----
+  this.input = `2026-02-11 10:01:12.123  INFO 12345 --- [nio-8080-exec-1] c.example.Api : GET /v1/data?code=SplxlOBeZQQYbYS6WxSbIA&state=af0ifjsldkj&access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+Authorization: Bearer abcdef123456
+Authorization: Basic dXNlcjpwYXNz
+Cookie: session=SID_abc123; refresh_token=r1_234; other=ok
+Set-Cookie: id_token=IDTOK_123; Path=/; HttpOnly
 X-Api-Key: SUPERSECRET
 api_key=SUPERSECRET&x=1
-{"token":"tok_12345","other":"ok"}`;
+DATABASE_URL=postgres://user:pass@db.example.com:5432/app
+{"token":"tok_12345","client_secret":"shh","other":"ok"}
+spring.datasource.password=supersecretpw
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`;
   this.output = "";
 
   this.showAdvanced = false;
   this.rulesJson = "";
 
-  const PRESET_RULES = {
-    springboot: [
+  // ---- preset sets (building blocks) ----
+  const PRESET_SETS = {
+    http_tokens: [
+      // Authorization (bearer + basic variants)
       { type: "bearer_header", header: "Authorization", key: "", marker: "", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "Authorization: Basic ", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
 
+      // common API key headers
       { type: "header", header: "X-Api-Key", key: "", marker: "", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
       { type: "header", header: "X-API-Key", key: "", marker: "", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
       { type: "header", header: "Api-Key", key: "", marker: "", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
 
+      // cookies (simple: redact each cookie line after prefix)
+      // NOTE: this will redact the *rest of the line* until whitespace; typical Cookie: has spaces, so it will only redact the first chunk.
+      // Better: treat cookie values via custom markers for common cookie keys below (in oauth set), but we include these as a baseline.
+      { type: "custom", header: "", key: "", marker: "Cookie: ", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "Set-Cookie: ", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+    ],
+
+    oauth_oidc: [
+      // query params
+      { type: "query_param", header: "", key: "code", marker: "", mode: "set", stop_char: "", stop_set: "& \t\r\n", max_len: 0 },
+      { type: "query_param", header: "", key: "state", marker: "", mode: "set", stop_char: "", stop_set: "& \t\r\n", max_len: 0 },
       { type: "query_param", header: "", key: "access_token", marker: "", mode: "set", stop_char: "", stop_set: "& \t\r\n", max_len: 0 },
       { type: "query_param", header: "", key: "refresh_token", marker: "", mode: "set", stop_char: "", stop_set: "& \t\r\n", max_len: 0 },
       { type: "query_param", header: "", key: "id_token", marker: "", mode: "set", stop_char: "", stop_set: "& \t\r\n", max_len: 0 },
       { type: "query_param", header: "", key: "token", marker: "", mode: "set", stop_char: "", stop_set: "& \t\r\n", max_len: 0 },
-      { type: "query_param", header: "", key: "api_key", marker: "", mode: "set", stop_char: "", stop_set: "& \t\r\n", max_len: 0 },
-      { type: "query_param", header: "", key: "apikey", marker: "", mode: "set", stop_char: "", stop_set: "& \t\r\n", max_len: 0 },
-      { type: "query_param", header: "", key: "client_secret", marker: "", mode: "set", stop_char: "", stop_set: "& \t\r\n", max_len: 0 },
 
+      // JSON fields
       { type: "json_field", header: "", key: "token", marker: "", mode: "char", stop_char: "\"", stop_set: "", max_len: 0 },
       { type: "json_field", header: "", key: "access_token", marker: "", mode: "char", stop_char: "\"", stop_set: "", max_len: 0 },
       { type: "json_field", header: "", key: "refresh_token", marker: "", mode: "char", stop_char: "\"", stop_set: "", max_len: 0 },
       { type: "json_field", header: "", key: "id_token", marker: "", mode: "char", stop_char: "\"", stop_set: "", max_len: 0 },
-      { type: "json_field", header: "", key: "password", marker: "", mode: "char", stop_char: "\"", stop_set: "", max_len: 0 },
-      { type: "json_field", header: "", key: "secret", marker: "", mode: "char", stop_char: "\"", stop_set: "", max_len: 0 },
-      { type: "json_field", header: "", key: "api_key", marker: "", mode: "char", stop_char: "\"", stop_set: "", max_len: 0 },
+      { type: "json_field", header: "", key: "client_secret", marker: "", mode: "char", stop_char: "\"", stop_set: "", max_len: 0 },
 
+      // cookie-style tokens commonly named like these (works for Cookie: a=b; c=d)
+      { type: "custom", header: "", key: "", marker: "session=", mode: "set", stop_char: "", stop_set: "; \t\r\n", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "access_token=", mode: "set", stop_char: "", stop_set: "; \t\r\n", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "refresh_token=", mode: "set", stop_char: "", stop_set: "; \t\r\n", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "id_token=", mode: "set", stop_char: "", stop_set: "; \t\r\n", max_len: 0 },
+    ],
+
+    database_secrets: [
+      // common query params
+      { type: "query_param", header: "", key: "password", marker: "", mode: "set", stop_char: "", stop_set: "& \t\r\n", max_len: 0 },
+      { type: "query_param", header: "", key: "passwd", marker: "", mode: "set", stop_char: "", stop_set: "& \t\r\n", max_len: 0 },
+      { type: "query_param", header: "", key: "pwd", marker: "", mode: "set", stop_char: "", stop_set: "& \t\r\n", max_len: 0 },
+
+      // JSON fields
+      { type: "json_field", header: "", key: "password", marker: "", mode: "char", stop_char: "\"", stop_set: "", max_len: 0 },
+
+      // key=value config lines
+      { type: "custom", header: "", key: "", marker: "DATABASE_URL=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "DB_PASSWORD=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "DB_USERNAME=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+
+      // connection-string-ish pieces (often semicolon-delimited)
+      { type: "custom", header: "", key: "", marker: "Password=", mode: "set", stop_char: "", stop_set: "; \t\r\n", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "Pwd=", mode: "set", stop_char: "", stop_set: "; \t\r\n", max_len: 0 },
+    ],
+
+    cloud_creds: [
+      // AWS env-style
+      { type: "custom", header: "", key: "", marker: "AWS_ACCESS_KEY_ID=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "AWS_SECRET_ACCESS_KEY=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "AWS_SESSION_TOKEN=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+
+      // Azure-ish env-style
+      { type: "custom", header: "", key: "", marker: "AZURE_CLIENT_SECRET=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "AZURE_CLIENT_CERTIFICATE_PASSWORD=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+
+      // GCP env-style
+      { type: "custom", header: "", key: "", marker: "GOOGLE_APPLICATION_CREDENTIALS=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+
+      // common JSON fields
+      { type: "json_field", header: "", key: "aws_access_key_id", marker: "", mode: "char", stop_char: "\"", stop_set: "", max_len: 0 },
+      { type: "json_field", header: "", key: "aws_secret_access_key", marker: "", mode: "char", stop_char: "\"", stop_set: "", max_len: 0 },
+      { type: "json_field", header: "", key: "azure_client_secret", marker: "", mode: "char", stop_char: "\"", stop_set: "", max_len: 0 },
+    ],
+
+    framework_addons_spring: [
       { type: "custom", header: "", key: "", marker: "spring.datasource.password=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
       { type: "custom", header: "", key: "", marker: "spring.redis.password=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
       { type: "custom", header: "", key: "", marker: "spring.mail.password=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+
+      // spring-style "..." can show up in YAML too; we at least cover the equals form here.
       { type: "custom", header: "", key: "", marker: "management.endpoint.env.keys-to-sanitize=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
     ],
+
+    framework_addons_django: [
+      { type: "custom", header: "", key: "", marker: "SECRET_KEY=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "DJANGO_SECRET_KEY=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+    ],
+
+    framework_addons_rails: [
+      { type: "custom", header: "", key: "", marker: "secret_key_base=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "RAILS_MASTER_KEY=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+    ],
+
+    framework_addons_laravel: [
+      { type: "custom", header: "", key: "", marker: "APP_KEY=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+      { type: "custom", header: "", key: "", marker: "JWT_SECRET=", mode: "whitespace", stop_char: "", stop_set: "", max_len: 0 },
+    ],
+  };
+
+  // groupings you can click like "HTTP tokens", etc.
+  const PRESET_GROUPS = {
+    http_tokens: ["http_tokens"],
+    oauth_oidc: ["oauth_oidc"],
+    database_secrets: ["database_secrets"],
+    cloud_creds: ["cloud_creds"],
+    spring_addons: ["framework_addons_spring"],
+    django_addons: ["framework_addons_django"],
+    rails_addons: ["framework_addons_rails"],
+    laravel_addons: ["framework_addons_laravel"],
+
+    // convenience "combo" (optional): Spring-ish app baseline
+    spring_app_bundle: ["http_tokens", "oauth_oidc", "database_secrets", "cloud_creds", "framework_addons_spring"],
   };
 
   this.ruleKey = (r) => {
@@ -118,11 +211,21 @@ api_key=SUPERSECRET&x=1
     this.updateRuleShades();
   };
 
+  // apply a "set" or a "group"
   this.applyPreset = (presetId) => {
-    const toAdd = PRESET_RULES[presetId] || [];
-    if (!toAdd.length) return;
+    const sets = PRESET_GROUPS[presetId] || [presetId];
 
-    for (const r of toAdd) this.rules.push({ ...r });
+    let added = 0;
+    for (const setId of sets) {
+      const toAdd = PRESET_SETS[setId] || [];
+      for (const r of toAdd) {
+        this.rules.push({ ...r });
+        added++;
+      }
+    }
+
+    if (!added) return;
+
     this.dedupeRules();
     this.refresh("rules");
     this.markDirty();
@@ -285,8 +388,6 @@ api_key=SUPERSECRET&x=1
       this.setStatus("OK");
       this.syncRulesJson();
       this.run();
-
-      // paint after first render
       this.paintRuleBoxes();
     } catch (e) {
       console.error(e);
@@ -310,8 +411,22 @@ api_key=SUPERSECRET&x=1
 
         <div style="margin-top:10px;">
           <div class="muted" style="margin-bottom:6px;">Presets</div>
-          <div class="row" style="flex-wrap:wrap;">
-            <button class="btn" onclick="${() => this.applyPreset("springboot")}">Spring Boot</button>
+          <div class="row" style="flex-wrap:no-wrap;">
+            <button class="btn" onclick="${() => this.applyPreset("http_tokens")}">HTTP tokens</button>
+            <button class="btn" onclick="${() => this.applyPreset("oauth_oidc")}">OAuth / OIDC</button>
+            <button class="btn" onclick="${() => this.applyPreset("database_secrets")}">Database secrets</button>
+            <button class="btn" onclick="${() => this.applyPreset("cloud_creds")}">Cloud creds</button>
+          </div>
+
+          <div class="row" style="flex-wrap:no-wrap;margin-top:8px;">
+            <button class="btn" onclick="${() => this.applyPreset("spring_addons")}">Spring add-ons</button>
+            <button class="btn" onclick="${() => this.applyPreset("django_addons")}">Django add-ons</button>
+            <button class="btn" onclick="${() => this.applyPreset("rails_addons")}">Rails add-ons</button>
+            <button class="btn" onclick="${() => this.applyPreset("laravel_addons")}">Laravel add-ons</button>
+          </div>
+
+          <div class="row" style="flex-wrap:-no-wrap;margin-top:8px;">
+            <button class="btn" onclick="${() => this.applyPreset("spring_app_bundle")}">Spring app bundle</button>
           </div>
         </div>
 
